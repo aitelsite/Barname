@@ -1,0 +1,29 @@
+name: Deploy Rubika ID Finder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "rubika-id-finder/**"
+      - ".github/workflows/deploy-rubika-id-finder.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rubika-id-finder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: uv sync
+      - name: Deploy Python Worker
+        run: uv run pywrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
