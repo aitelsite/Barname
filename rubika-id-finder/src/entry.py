@@ -5,6 +5,7 @@ Keep bot credentials in the Cloudflare secret RUBIKA_BOT_TOKEN.
 from urllib.parse import quote
 
 from js import fetch, JSON
+from pyodide.ffi import to_js
 from workers import WorkerEntrypoint, Response
 
 WEBHOOK_URL = "https://rubika-id-finder.oj155304.workers.dev/"
@@ -95,11 +96,11 @@ def format_reply(info):
 
 async def rubika_post(token, method, payload):
     url = f"https://botapi.rubika.ir/v3/{quote(str(token), safe='')}/{method}"
-    response = await fetch(url, {
+    response = await fetch(url, to_js({
         "method": "POST",
         "headers": {"Content-Type": "application/json"},
         "body": JSON.stringify(payload),
-    })
+    }))
     status = int(response.status)
     try:
         body = await response.json()
