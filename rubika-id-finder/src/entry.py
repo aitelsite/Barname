@@ -10,6 +10,18 @@ from workers import WorkerEntrypoint, Response
 WEBHOOK_URL = "https://rubika-id-finder.oj155304.workers.dev/"
 
 
+def json_response(data, status=200):
+    # Use the Workers Python SDK constructor consistently; keyword arguments to
+    # Response.json are not portable across runtime SDK versions.
+    return Response.new(
+        JSON.stringify(data),
+        {
+            "status": status,
+            "headers": {"content-type": "application/json; charset=utf-8"},
+        },
+    )
+
+
 def first(mapping, *keys):
     if not isinstance(mapping, dict):
         return None
@@ -106,12 +118,12 @@ class Default(WorkerEntrypoint):
             # Return a controlled response instead of allowing a runtime 1101 page.
             # Never include request bodies, tokens, or upstream URLs in this message.
             error_name = type(exc).__name__
-            return Response.json({
+            return json_response({
                 "ok": False,
                 "error": "worker_exception",
                 "exception_type": error_name,
                 "hint": "Check Worker logs for the stack trace.",
-            }, status=500)
+            }, 500)
 
     async def _handle(self, request):
         token = getattr(self.env, "RUBIKA_BOT_TOKEN", None)
@@ -121,7 +133,7 @@ class Default(WorkerEntrypoint):
 
         if request.method == "GET" and url_path.endswith("/setup-webhook"):
             if not token:
-                return Response.json({"ok": False, "error": "RUBIKA_BOT_TOKEN is not configured"}, status=500)
+                return json_response({"ok": False, "error": "RUBIKA_BOT_TOKEN is not configured"}, 500)
             try:
                 status, body = await rubika_post(token, "updateBotEndpoints", {
                     "url": WEBHOOK_URL,
@@ -129,20 +141,20 @@ class Default(WorkerEntrypoint):
                 })
                 api_status = str(body.get("status", "")).upper() if isinstance(body, dict) else ""
                 ok = 200 <= status < 300 and api_status not in {"ERROR", "FAILED"}
-                return Response.json({
+                return json_response({
                     "ok": ok,
                     "action": "register_webhook",
                     "endpoint_type": "ReceiveUpdate",
                     "http_status": status,
                     "rubika_status": body.get("status") if isinstance(body, dict) else None,
                     "message": "Webhook registration request sent; check Rubika response." if ok else "Rubika rejected the webhook registration.",
-                }, status=200 if ok else 502)
+                }, 200 if ok else 502)
             except Exception as exc:
                 return Response.json({
                     "ok": False,
                     "error": "Could not contact Rubika Bot API",
                     "exception_type": type(exc).__name__,
-                }, status=502)
+                }, 502)
 
         if request.method == "GET":
             return Response.json({
@@ -156,15 +168,15 @@ class Default(WorkerEntrypoint):
             })
 
         if request.method != "POST":
-            return Response("Method Not Allowed", status=405)
+            return Response.new("Method Not Allowed", {"status": 405})
 
         if not token:
-            return Response.json({"ok": False, "error": "RUBIKA_BOT_TOKEN secret is not configured"}, status=500)
+            return Response.json({"ok": False, "error": "RUBIKA_BOT_TOKEN secret is not configured"}, 500)
 
         try:
             payload = await request.json()
         except Exception:
-            return Response("Invalid JSON", status=400)
+            return Response.new("Invalid JSON", {"status": 400})
 
         info = extract_update(payload)
         if not info:
