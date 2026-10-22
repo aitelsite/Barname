@@ -15,11 +15,11 @@ jobs:
       run:
         working-directory: rubika-id-finder
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Set up Python
+        run: uv python install 3.13
       - name: Install dependencies
         run: uv sync
       - name: Deploy Python Worker
