@@ -10,7 +10,7 @@ from workers import WorkerEntrypoint, Response
 WEBHOOK_URL = "https://rubika-id-finder.oj155304.workers.dev/"
 
 
-def json_response(data, status=200):
+def json_response(data, 200):
     # Use the Workers Python SDK constructor consistently; keyword arguments to
     # Response.json are not portable across runtime SDK versions.
     return Response.new(
@@ -150,14 +150,14 @@ class Default(WorkerEntrypoint):
                     "message": "Webhook registration request sent; check Rubika response." if ok else "Rubika rejected the webhook registration.",
                 }, 200 if ok else 502)
             except Exception as exc:
-                return Response.json({
+                return json_response({
                     "ok": False,
                     "error": "Could not contact Rubika Bot API",
                     "exception_type": type(exc).__name__,
                 }, 502)
 
         if request.method == "GET":
-            return Response.json({
+            return json_response({
                 "ok": True,
                 "service": "rubika-id-finder",
                 "mode": "webhook",
@@ -171,7 +171,7 @@ class Default(WorkerEntrypoint):
             return Response.new("Method Not Allowed", {"status": 405})
 
         if not token:
-            return Response.json({"ok": False, "error": "RUBIKA_BOT_TOKEN secret is not configured"}, 500)
+            return json_response({"ok": False, "error": "RUBIKA_BOT_TOKEN secret is not configured"}, 500)
 
         try:
             payload = await request.json()
@@ -180,15 +180,15 @@ class Default(WorkerEntrypoint):
 
         info = extract_update(payload)
         if not info:
-            return Response.json({"ok": True, "ignored": "unrecognized update"})
+            return json_response({"ok": True, "ignored": "unrecognized update"})
 
         command = info["text"].strip().lower()
         allowed = {"/start", "/id", "/info", "آیدی", "شناسه", "شناسه من", "آیدی من"}
         if command not in allowed and not command.startswith("/id@"):
-            return Response.json({"ok": True, "ignored": "not an ID command"})
+            return json_response({"ok": True, "ignored": "not an ID command"})
 
         if not info["chat_id"]:
-            return Response.json({"ok": True, "ignored": "missing chat_id"})
+            return json_response({"ok": True, "ignored": "missing chat_id"})
 
         try:
             status, body = await rubika_post(token, "sendMessage", {
@@ -197,17 +197,17 @@ class Default(WorkerEntrypoint):
             })
             api_status = str(body.get("status", "")).upper() if isinstance(body, dict) else ""
             if status < 200 or status >= 300 or api_status in {"ERROR", "FAILED"}:
-                return Response.json({
+                return json_response({
                     "ok": False,
                     "error": "Rubika Bot API request failed",
                     "upstream_status": status,
                     "rubika_status": body.get("status") if isinstance(body, dict) else None,
-                }, status=502)
+                }, 502)
         except Exception as exc:
-            return Response.json({
+            return json_response({
                 "ok": False,
                 "error": "Failed to call Rubika Bot API",
                 "exception_type": type(exc).__name__,
-            }, status=502)
+            }, 502)
 
-        return Response.json({"ok": True})
+        return json_response({"ok": True})
