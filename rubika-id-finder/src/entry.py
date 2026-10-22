@@ -1,6 +1,6 @@
 """Rubika ID Finder webhook for Cloudflare Python Workers.
 
-Set RUBIKA_BOT_TOKEN as a Cloudflare Worker secret.
+Keep bot credentials in the Cloudflare secret RUBIKA_BOT_TOKEN.
 """
 from urllib.parse import quote
 
@@ -100,8 +100,24 @@ async def rubika_post(token, method, payload):
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
+        try:
+            return await self._handle(request)
+        except Exception as exc:
+            # Return a controlled response instead of allowing a runtime 1101 page.
+            # Never include request bodies, tokens, or upstream URLs in this message.
+            error_name = type(exc).__name__
+            return Response.json({
+                "ok": False,
+                "error": "worker_exception",
+                "exception_type": error_name,
+                "hint": "Check Worker logs for the stack trace.",
+            }, status=500)
+
+    async def _handle(self, request):
         token = getattr(self.env, "RUBIKA_BOT_TOKEN", None)
-        url_path = str(request.url).split("?", 1)[0].rstrip("/")
+        # request.url is provided by the Workers runtime; avoid stringifying a JS URL wrapper.
+        request_url = request.url
+        url_path = request_url.split("?", 1)[0].rstrip("/")
 
         if request.method == "GET" and url_path.endswith("/setup-webhook"):
             if not token:
@@ -121,8 +137,12 @@ class Default(WorkerEntrypoint):
                     "rubika_status": body.get("status") if isinstance(body, dict) else None,
                     "message": "Webhook registration request sent; check Rubika response." if ok else "Rubika rejected the webhook registration.",
                 }, status=200 if ok else 502)
-            except Exception:
-                return Response.json({"ok": False, "error": "Could not contact Rubika Bot API"}, status=502)
+            except Exception as exc:
+                return Response.json({
+                    "ok": False,
+                    "error": "Could not contact Rubika Bot API",
+                    "exception_type": type(exc).__name__,
+                }, status=502)
 
         if request.method == "GET":
             return Response.json({
@@ -132,6 +152,7 @@ class Default(WorkerEntrypoint):
                 "token_configured": bool(token),
                 "webhook_url": WEBHOOK_URL,
                 "setup_path": "/setup-webhook",
+                "version": "2026-10-22-safe-handler",
             })
 
         if request.method != "POST":
@@ -170,7 +191,11 @@ class Default(WorkerEntrypoint):
                     "upstream_status": status,
                     "rubika_status": body.get("status") if isinstance(body, dict) else None,
                 }, status=502)
-        except Exception:
-            return Response.json({"ok": False, "error": "Failed to call Rubika Bot API"}, status=502)
+        except Exception as exc:
+            return Response.json({
+                "ok": False,
+                "error": "Failed to call Rubika Bot API",
+                "exception_type": type(exc).__name__,
+            }, status=502)
 
         return Response.json({"ok": True})
