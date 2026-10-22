@@ -79,20 +79,83 @@ def extract_update(payload):
     }
 
 
+def nested_first(mapping, *paths):
+    """Read the first non-empty value from common nested update shapes."""
+    for path in paths:
+        current = mapping
+        for key in path.split("."):
+            if not isinstance(current, dict):
+                current = None
+                break
+            current = current.get(key)
+        if current not in (None, ""):
+            return current
+    return None
+
+
+def forwarded_details(message):
+    """Return forwarded marker and source ID when Rubika includes it in the update."""
+    if not isinstance(message, dict):
+        return False, None, None
+    forward_obj = first(message, "forwarded_from", "forward_from", "forwarded_message", "forward")
+    source_id = first(message, "forwarded_from_id", "forward_from_id", "forwarded_user_id")
+    source_name = first(message, "forwarded_from_name", "forward_from_name")
+    if isinstance(forward_obj, dict):
+        source_id = source_id or first(forward_obj, "user_id", "sender_id", "id", "chat_id")
+        source_name = source_name or first(forward_obj, "name", "first_name", "title", "username")
+    is_forwarded = bool(forward_obj or source_id or source_name)
+    return is_forwarded, source_id, source_name
+
+
 def format_reply(info):
+    message = info.get("message") or {}
+    chat_id = info.get("chat_id")
+    sender_id = info.get("sender_id")
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    sender = message.get("sender") if isinstance(message.get("sender"), dict) else {}
+    chat_title = (
+        first(chat, "title", "name", "first_name")
+        or first(message, "chat_title", "title")
+        or "—"
+    )
+    chat_username = first(chat, "username", "user_name") or first(message, "chat_username", "username") or "—"
+    if chat_username != "—" and not str(chat_username).startswith("@"):
+        chat_username = f"@{chat_username}"
+    sender_name = first(sender, "name", "first_name", "username") or first(message, "sender_name", "first_name", "username") or "—"
+
     lines = [
-        "🔎 شناسه‌یاب روبیکا",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🆔 اطلاعات شناسه",
+        "━━━━━━━━━━━━━━━━━━━━",
         "",
-        f"🆔 شناسه چت: {info['chat_id'] or 'در دادهٔ دریافتی موجود نیست'}",
-        f"👤 شناسه فرستنده: {info['sender_id'] or 'در دادهٔ دریافتی موجود نیست'}",
-        f"💬 نوع چت: {chat_kind(info['chat_id'])}",
-        f"🧩 نوع فرستنده: {chat_kind(info['sender_id'])}",
+        f"👤 شناسه فرستنده (User ID): {sender_id or 'در دادهٔ دریافتی موجود نیست'}",
+        f"📌 نوع فرستنده: {chat_kind(sender_id)}",
+        f"🪪 نام فرستنده: {sender_name}",
+        "",
+        f"💬 شناسه این چت (Chat ID): {chat_id or 'در دادهٔ دریافتی موجود نیست'}",
+        f"📌 نوع چت: {chat_kind(chat_id)}",
+        f"📛 عنوان چت: {chat_title}",
+        f"🔗 یوزرنیم چت: {chat_username}",
     ]
-    message_id = first(info.get("message") or {}, "message_id", "messageId", "id")
+    message_id = first(message, "message_id", "messageId", "id")
     if message_id:
         lines.append(f"✉️ شناسه پیام: {message_id}")
-    return "\n".join(lines)
 
+    is_forwarded, source_id, source_name = forwarded_details(message)
+    if is_forwarded:
+        lines.extend(["", "📨 اطلاعات پیام فورواردشده:"])
+        if source_id:
+            lines.append(f"🆔 شناسه مبدأ فوروارد: {source_id}")
+        else:
+            lines.append("🆔 شناسه مبدأ در دادهٔ دریافتی موجود نیست.")
+        if source_name:
+            lines.append(f"👤 نام مبدأ: {source_name}")
+    lines.extend([
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "💡 برای دریافت شناسه گروه یا کانال، ربات را به آن اضافه کنید و در همان چت دستور بفرستید.",
+    ])
+    return "\n".join(lines)
 
 async def rubika_post(token, method, payload):
     url = f"https://botapi.rubika.ir/v3/{quote(str(token), safe='')}/{method}"
@@ -182,7 +245,7 @@ class Default(WorkerEntrypoint):
             return json_response({"ok": True, "ignored": "unrecognized update"})
 
         command = info["text"].strip().lower()
-        allowed = {"/start", "/id", "/info", "آیدی", "شناسه", "شناسه من", "آیدی من"}
+        allowed = {"/start", "/id", "/info", "آیدی", "شناسه", "شناسه من", "آیدی من", "ایدی", "id"}
         if command not in allowed and not command.startswith("/id@"):
             return json_response({"ok": True, "ignored": "not an ID command"})
 
