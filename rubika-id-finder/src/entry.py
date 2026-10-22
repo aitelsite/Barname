@@ -13,12 +13,10 @@ WEBHOOK_URL = "https://rubika-id-finder.oj155304.workers.dev/"
 def json_response(data, status=200):
     # Use the Workers Python SDK constructor consistently; keyword arguments to
     # Response.json are not portable across runtime SDK versions.
-    return Response.new(
+    return Response(
         JSON.stringify(data),
-        {
-            "status": status,
-            "headers": {"content-type": "application/json; charset=utf-8"},
-        },
+        status=status,
+        headers={"content-type": "application/json; charset=utf-8"},
     )
 
 
@@ -168,7 +166,7 @@ class Default(WorkerEntrypoint):
             })
 
         if request.method != "POST":
-            return Response.new("Method Not Allowed", {"status": 405})
+            return Response("Method Not Allowed", status=405)
 
         if not token:
             return json_response({"ok": False, "error": "RUBIKA_BOT_TOKEN secret is not configured"}, 500)
@@ -176,7 +174,7 @@ class Default(WorkerEntrypoint):
         try:
             payload = await request.json()
         except Exception:
-            return Response.new("Invalid JSON", {"status": 400})
+            return Response("Invalid JSON", status=400)
 
         info = extract_update(payload)
         if not info:
