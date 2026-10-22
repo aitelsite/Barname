@@ -3,9 +3,7 @@ name = "rubika-id-finder"
 version = "0.1.0"
 description = "Experimental Rubika ID finder webhook for Cloudflare Python Workers"
 requires-python = ">=3.12"
-dependencies = [
-  "workers-runtime-sdk",
-]
+dependencies = []
 
 [dependency-groups]
 dev = [
