@@ -10,7 +10,7 @@ from workers import WorkerEntrypoint, Response
 WEBHOOK_URL = "https://rubika-id-finder.oj155304.workers.dev/"
 
 
-def json_response(data, 200):
+def json_response(data, status=200):
     # Use the Workers Python SDK constructor consistently; keyword arguments to
     # Response.json are not portable across runtime SDK versions.
     return Response.new(
